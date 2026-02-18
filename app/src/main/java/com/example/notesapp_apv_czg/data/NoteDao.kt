@@ -8,8 +8,14 @@ interface NoteDao {
     @Query("SELECT * FROM notes ORDER BY createdAtMillis DESC")
     fun getAllNotes(): Flow<List<Note>>
 
+    @Query("SELECT * FROM notes ORDER BY createdAtMillis DESC LIMIT :limit OFFSET :offset")
+    suspend fun getNotesBatch(limit: Int, offset: Int): List<Note>
+
     @Query("SELECT * FROM notes WHERE isTask = 1 ORDER BY dueDateMillis ASC")
     fun getAllTasks(): Flow<List<Note>>
+
+    @Query("SELECT * FROM notes WHERE isTask = 1 AND isCompleted = 0 AND dueDateMillis IS NOT NULL")
+    suspend fun getPendingTasksForReminders(): List<Note>
 
     @Query("SELECT * FROM notes WHERE isFavorite = 1 ORDER BY createdAtMillis DESC")
     fun getFavorites(): Flow<List<Note>>

@@ -19,6 +19,12 @@ class NoteViewModel(private val repo: NoteRepository) : ViewModel() {
     private val _currentNote = MutableStateFlow<Note?>(null)
     val currentNote: StateFlow<Note?> = _currentNote.asStateFlow()
 
+    private val _isSaving = MutableStateFlow(false)
+    val isSaving: StateFlow<Boolean> = _isSaving.asStateFlow()
+
+    private val _errorMessage = MutableStateFlow<String?>(null)
+    val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
+
     init {
         repo.getAllNotes()
             .onEach { _notes.value = it }
@@ -46,22 +52,48 @@ class NoteViewModel(private val repo: NoteRepository) : ViewModel() {
 
     fun insert(note: Note, onResult: (Long) -> Unit = {}) {
         viewModelScope.launch {
-            val id = repo.insert(note)
-            onResult(id)
+            _isSaving.value = true
+            try {
+                val id = repo.insert(note)
+                onResult(id)
+            } catch (e: Exception) {
+                _errorMessage.value = e.message ?: "Error al guardar la nota"
+            } finally {
+                _isSaving.value = false
+            }
         }
     }
 
     fun update(note: Note) {
-        viewModelScope.launch { repo.update(note) }
+        viewModelScope.launch {
+            _isSaving.value = true
+            try {
+                repo.update(note)
+            } catch (e: Exception) {
+                _errorMessage.value = e.message ?: "Error al actualizar la nota"
+            } finally {
+                _isSaving.value = false
+            }
+        }
     }
 
     fun delete(note: Note) {
-        viewModelScope.launch { repo.delete(note) }
+        viewModelScope.launch {
+            try {
+                repo.delete(note)
+            } catch (e: Exception) {
+                _errorMessage.value = e.message ?: "Error al eliminar la nota"
+            }
+        }
     }
 
     fun toggleFavorite(note: Note) {
-        viewModelScope.launch { 
-            repo.update(note.copy(isFavorite = !note.isFavorite))
+        viewModelScope.launch {
+            try {
+                repo.update(note.copy(isFavorite = !note.isFavorite))
+            } catch (e: Exception) {
+                _errorMessage.value = e.message ?: "Error al actualizar favorito"
+            }
         }
     }
 
@@ -93,5 +125,9 @@ class NoteViewModel(private val repo: NoteRepository) : ViewModel() {
             }
             .catch { /* handle */ }
             .launchIn(viewModelScope)
+    }
+
+    fun clearErrorMessage() {
+        _errorMessage.value = null
     }
 }

@@ -1,10 +1,8 @@
 package com.example.notesapp_apv_czg
 
 import android.Manifest
-import android.app.AlarmManager
 import android.app.NotificationChannel
 import android.app.NotificationManager
-import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -34,10 +32,13 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import kotlinx.coroutines.launch
-import com.example.notesapp_apv_czg.broadcastreceivers.NotificationReceiver
+import com.example.notesapp_apv_czg.broadcastreceivers.cancelTaskReminder
+import com.example.notesapp_apv_czg.broadcastreceivers.scheduleTaskReminder
 import com.example.notesapp_apv_czg.data.AppDatabase
+import com.example.notesapp_apv_czg.data.AndroidStructuredLogger
 import com.example.notesapp_apv_czg.data.Note
 import com.example.notesapp_apv_czg.data.NoteRepository
+import com.example.notesapp_apv_czg.data.WriteEngine
 import com.example.notesapp_apv_czg.ui.NoteEditorScreen
 import com.example.notesapp_apv_czg.ui.NoteListScreen
 import com.example.notesapp_apv_czg.ui.NoteViewModel
@@ -61,7 +62,17 @@ class MainActivity : ComponentActivity() {
         requestPermissions()
 
         val db = AppDatabase.getInstance(applicationContext)
-        val repo = NoteRepository(db.noteDao())
+        val logger = AndroidStructuredLogger
+        val writeEngine = WriteEngine(
+            noteDao = db.noteDao(),
+            offlineWriteDao = db.offlineWriteDao(),
+            logger = logger
+        )
+        val repo = NoteRepository(
+            dao = db.noteDao(),
+            writeEngine = writeEngine,
+            logger = logger
+        )
 
         setContent {
             NotesAppAPVCZGTheme {
@@ -79,13 +90,19 @@ class MainActivity : ComponentActivity() {
                                 onOpen = { id: Long -> nav.navigate("detail/$id") },
                                 onDelete = { note: Note ->
                                     vm.delete(note)
-                                    cancelNotification(note)
+                                    cancelTaskReminder(this@MainActivity, note)
                                 },
                                 onToggleLock = { note: Note, locked: Boolean ->
                                     vm.update(note.copy(isLocked = locked))
                                 },
                                 onToggleComplete = { note: Note ->
-                                    vm.update(note.copy(isCompleted = !note.isCompleted))
+                                    val updated = note.copy(isCompleted = !note.isCompleted)
+                                    vm.update(updated)
+                                    if (updated.isCompleted) {
+                                        cancelTaskReminder(this@MainActivity, updated)
+                                    } else if (updated.isTask && updated.dueDateMillis != null) {
+                                        scheduleTaskReminder(this@MainActivity, updated)
+                                    }
                                 },
                                 onToggleFavorite = { note: Note ->
                                     vm.toggleFavorite(note)
@@ -102,11 +119,11 @@ class MainActivity : ComponentActivity() {
                                 noteId = noteId,
                                 viewModel = vm,
                                 onCancel = { nav.popBackStack() },
-                                onSave = {
-                                    currentNote?.let { note ->
-                                        if (note.isTask && note.dueDateMillis != null) {
-                                            scheduleNotification(note)
-                                        }
+                                onSave = { savedNote ->
+                                    if (savedNote.isTask && !savedNote.isCompleted && savedNote.dueDateMillis != null) {
+                                        scheduleTaskReminder(this@MainActivity, savedNote)
+                                    } else {
+                                        cancelTaskReminder(this@MainActivity, savedNote)
                                     }
                                     nav.popBackStack()
                                 }
@@ -165,47 +182,6 @@ class MainActivity : ComponentActivity() {
 
         if (permissionsToRequest.isNotEmpty()) {
             requestPermissionLauncher.launch(permissionsToRequest.toTypedArray())
-        }
-    }
-
-    private fun scheduleNotification(note: Note) {
-        val alarmManager = getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        val intent = Intent(this, NotificationReceiver::class.java).apply {
-            putExtra(NotificationReceiver.TITLE, note.title)
-            putExtra(NotificationReceiver.DESCRIPTION, note.description)
-            putExtra(NotificationReceiver.NOTIFICATION_ID, note.id.toInt())
-        }
-
-        val pendingIntent = PendingIntent.getBroadcast(
-            this, note.id.toInt(), intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-
-        note.dueDateMillis?.let {
-            if (it > System.currentTimeMillis()) {
-                try {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !alarmManager.canScheduleExactAlarms()) {
-                        // App cannot schedule exact alarms. Maybe navigate to settings.
-                        return
-                    }
-                    alarmManager.setExact(AlarmManager.RTC_WAKEUP, it, pendingIntent)
-                } catch (e: SecurityException) {
-                    // Handle case where permission is denied
-                }
-            }
-        } ?: run {
-            // If due date is null, cancel any existing alarm for this note
-            cancelNotification(note)
-        }
-    }
-
-    private fun cancelNotification(note: Note) {
-        val alarmManager = getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        val intent = Intent(this, NotificationReceiver::class.java)
-        val pendingIntent = PendingIntent.getBroadcast(
-            this, note.id.toInt(), intent, PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE
-        )
-        if (pendingIntent != null) {
-            alarmManager.cancel(pendingIntent)
         }
     }
 }

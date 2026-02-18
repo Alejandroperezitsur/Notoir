@@ -15,7 +15,6 @@ data class Note(
     val isCompleted: Boolean = false,
     val dueDateMillis: Long? = null,
     val priority: Int = 0,
-    val reminderMillis: Long? = null,
     val createdAtMillis: Long = System.currentTimeMillis(),
     val attachmentUris: List<String> = emptyList(),
     val attachmentDescriptions: List<String> = emptyList(),

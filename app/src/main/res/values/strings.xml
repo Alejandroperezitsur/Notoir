@@ -70,6 +70,9 @@
     <string name="pin_mismatch_error">PINs do not match</string>
     <string name="pin_incorrect_error">Incorrect PIN</string>
     <string name="unlock">Unlock</string>
-    <string name="locked_note_preview_warning">⚠️ This note is protected. Enter the PIN to view its content.</string>
-    <string name="recording_start_failed">Failed to start recording</string>
-</resources>
+73→    <string name="locked_note_preview_warning">⚠️ This note is protected. Enter the PIN to view its content.</string>
+74→    <string name="recording_start_failed">Failed to start recording</string>
+75→    <string name="reminder_time_in_past_warning">Reminder time is in the past. It was not scheduled.</string>
+76→    <string name="reminder_exact_alarm_not_allowed">Exact alarms are not allowed for this app. Reminder not scheduled.</string>
+77→    <string name="reminder_permission_denied_warning">Notification permission denied. Reminder not scheduled.</string>
+78→</resources>
