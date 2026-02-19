@@ -27,7 +27,7 @@ fun SecuritySection(
     currentNote: Note?,
     title: String,
     description: TextFieldValue,
-    isTask: Boolean,
+    mode: EditorMode,
     isCompleted: Boolean,
     priority: Int,
     dueDateMillis: Long?,
@@ -48,7 +48,7 @@ fun SecuritySection(
                         id = currentNote?.id ?: 0,
                         title = title,
                         description = description.text,
-                        isTask = isTask,
+                        isTask = mode is EditorMode.TaskMode,
                         isCompleted = isCompleted,
                         priority = priority,
                         dueDateMillis = dueDateMillis,
@@ -73,7 +73,7 @@ fun SecuritySection(
                         id = currentNote?.id ?: 0,
                         title = title,
                         description = description.text,
-                        isTask = isTask,
+                        isTask = mode is EditorMode.TaskMode,
                         isCompleted = isCompleted,
                         priority = priority,
                         dueDateMillis = dueDateMillis,
@@ -101,7 +101,7 @@ fun SecuritySection(
                         id = currentNote?.id ?: 0,
                         title = title,
                         description = description.text,
-                        isTask = isTask,
+                        isTask = mode is EditorMode.TaskMode,
                         isCompleted = isCompleted,
                         priority = priority,
                         dueDateMillis = dueDateMillis,
@@ -119,4 +119,3 @@ fun SecuritySection(
         )
     }
 }
-

@@ -8,19 +8,21 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
-import androidx.activity.ComponentActivity
+import android.view.WindowManager
+import androidx.fragment.app.FragmentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
@@ -38,16 +40,21 @@ import com.example.notesapp_apv_czg.data.AppDatabase
 import com.example.notesapp_apv_czg.data.AndroidStructuredLogger
 import com.example.notesapp_apv_czg.data.Note
 import com.example.notesapp_apv_czg.data.NoteRepository
-import com.example.notesapp_apv_czg.data.WriteEngine
+import com.example.notesapp_apv_czg.security.AppLockManager
+import com.example.notesapp_apv_czg.security.BiometricAuthenticator
+import com.example.notesapp_apv_czg.security.NoteCrypto
+import com.example.notesapp_apv_czg.security.SecureKeyManager
+import com.example.notesapp_apv_czg.security.VaultState
 import com.example.notesapp_apv_czg.ui.NoteEditorScreen
 import com.example.notesapp_apv_czg.ui.NoteListScreen
 import com.example.notesapp_apv_czg.ui.NoteViewModel
 import com.example.notesapp_apv_czg.ui.NoteDetailScreen
+import com.example.notesapp_apv_czg.ui.VaultLockScreen
 import com.example.notesapp_apv_czg.ui.theme.NotesAppAPVCZGTheme
 import com.example.notesapp_apv_czg.ui.theme.ThemeSettingsScreen
 import com.example.notesapp_apv_czg.ui.theme.ThemeManager
 
-class MainActivity : ComponentActivity() {
+class MainActivity : FragmentActivity() {
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { _ ->
@@ -57,29 +64,39 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        window.setFlags(
+            WindowManager.LayoutParams.FLAG_SECURE,
+            WindowManager.LayoutParams.FLAG_SECURE
+        )
 
         createNotificationChannel()
         requestPermissions()
 
         val db = AppDatabase.getInstance(applicationContext)
         val logger = AndroidStructuredLogger
-        val writeEngine = WriteEngine(
-            noteDao = db.noteDao(),
-            offlineWriteDao = db.offlineWriteDao(),
-            logger = logger
-        )
+        val secureKeyManager = SecureKeyManager()
         val repo = NoteRepository(
             dao = db.noteDao(),
-            writeEngine = writeEngine,
-            logger = logger
+            logger = logger,
+            crypto = NoteCrypto(secureKeyManager)
         )
+        val appLockManager = AppLockManager()
+        val biometricAuthenticator = BiometricAuthenticator(secureKeyManager)
 
         setContent {
             NotesAppAPVCZGTheme {
                 val nav = rememberNavController()
                 val vm: NoteViewModel = viewModel(factory = NoteViewModelFactory(repo))
+                val scope = rememberCoroutineScope()
+                val vaultState = appLockManager.vaultState.collectAsState().value
+                var lastAuthFailed by remember { mutableStateOf(false) }
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    NavHost(navController = nav, startDestination = "list", modifier = Modifier.padding(innerPadding)) {
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        NavHost(
+                            navController = nav,
+                            startDestination = "list",
+                            modifier = Modifier.padding(innerPadding)
+                        ) {
                         composable("list") {
                             NoteListScreen(
                                 notes = vm.notes.collectAsState().value,
@@ -134,22 +151,76 @@ class MainActivity : ComponentActivity() {
                             NoteDetailScreen(
                                 noteId = id,
                                 viewModel = vm,
+                                vaultState = appLockManager.vaultState,
                                 onBack = { nav.popBackStack() },
-                                onEdit = { noteId: Long -> nav.navigate("edit/$noteId") }
-                            )
-                        }
-                        composable("settings/theme") {
-                            val scope = rememberCoroutineScope()
-                            ThemeSettingsScreen(
-                                onNavigateUp = { nav.popBackStack() },
-                                currentScheme = ThemeManager.getCurrentScheme(),
-                                onSchemeSelected = { scheme -> 
+                                onEdit = { noteId: Long -> nav.navigate("edit/$noteId") },
+                                onRequestUnlock = { onResult ->
                                     scope.launch {
-                                        ThemeManager.setColorScheme(scheme)
+                                        lastAuthFailed = false
+                                        val result = biometricAuthenticator.authenticateForDecryption(
+                                            activity = this@MainActivity,
+                                            title = getString(R.string.unlock_note_title),
+                                            subtitle = getString(R.string.app_name)
+                                        , iv = ByteArray(12)
+                                        ) // IV real se obtiene del texto cifrado cuando se integre por nota
+                                        when (result) {
+                                            is BiometricAuthenticator.AuthResult.Success -> {
+                                                appLockManager.onAuthenticated()
+                                                onResult(true)
+                                            }
+                                            is BiometricAuthenticator.AuthResult.Failed -> {
+                                                lastAuthFailed = true
+                                                onResult(false)
+                                            }
+                                            is BiometricAuthenticator.AuthResult.Cancelled -> {
+                                                onResult(false)
+                                            }
+                                        }
                                     }
                                 }
                             )
                         }
+                        composable("settings/theme") {
+                            val scope = rememberCoroutineScope()
+                            val context = LocalContext.current
+                            ThemeSettingsScreen(
+                                onNavigateUp = { nav.popBackStack() },
+                                currentScheme = ThemeManager.getCurrentScheme(),
+                                onSchemeSelected = { scheme ->
+                                    scope.launch {
+                                        ThemeManager.setColorScheme(context, scheme)
+                                    }
+                                }
+                            )
+                        }
+                    }
+                        VaultLockScreen(
+                            visible = vaultState is VaultState.Locked,
+                            onUnlockClick = {
+                                scope.launch {
+                                    lastAuthFailed = false
+                                    val result = biometricAuthenticator.authenticateForEncryption(
+                                        activity = this@MainActivity,
+                                        title = getString(R.string.app_name),
+                                        subtitle = getString(R.string.unlock_note_title)
+                                    )
+                                    when (result) {
+                                        is BiometricAuthenticator.AuthResult.Success -> {
+                                            appLockManager.onAuthenticated()
+                                        }
+                                        is BiometricAuthenticator.AuthResult.Failed -> {
+                                            lastAuthFailed = true
+                                        }
+                                        is BiometricAuthenticator.AuthResult.LockedOut -> {
+                                            lastAuthFailed = true
+                                        }
+                                        is BiometricAuthenticator.AuthResult.Cancelled -> {
+                                        }
+                                    }
+                                }
+                            },
+                            lastAuthFailed = lastAuthFailed
+                        )
                     }
                 }
             }

@@ -9,7 +9,6 @@ import kotlinx.coroutines.delay
 
 class NoteStreamingImporterExporter(
     private val noteDao: NoteDao,
-    private val writeEngine: WriteEngine,
     private val logger: StructuredLogger
 ) {
     private val gson = Gson()
@@ -61,7 +60,7 @@ class NoteStreamingImporterExporter(
                 val line = reader.readLine() ?: break
                 if (line.isBlank()) continue
                 val note = gson.fromJson(line, Note::class.java)
-                writeEngine.insert(note.copy(id = 0))
+                noteDao.insert(note.copy(id = 0))
                 count++
                 if (count % delayEvery == 0) {
                     delay(5)

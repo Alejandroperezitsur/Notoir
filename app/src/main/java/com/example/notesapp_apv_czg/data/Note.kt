@@ -1,10 +1,18 @@
 package com.example.notesapp_apv_czg.data
 
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 import androidx.room.TypeConverters
 
-@Entity(tableName = "notes")
+@Entity(
+    tableName = "notes",
+    indices = [
+        Index(value = ["isTask", "dueDateMillis"]),
+        Index(value = ["createdAtMillis"]),
+        Index(value = ["isLocked"])
+    ]
+)
 @TypeConverters(Converters::class)
 data class Note(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,

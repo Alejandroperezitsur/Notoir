@@ -1,37 +1,61 @@
 package com.example.notesapp_apv_czg.ui.theme
 
+import android.content.Context
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.preferencesDataStore
+import kotlinx.coroutines.flow.first
+
+private val Context.themeDataStore: DataStore<Preferences> by preferencesDataStore("settings")
+private val KEY_THEME_NAME = stringPreferencesKey("theme_name")
 
 object ThemeManager {
-    private var currentScheme = mutableStateOf(predefinedSchemes[0])
+    private val currentScheme = mutableStateOf(predefinedSchemes[0])
     
     fun getCurrentScheme(): ColorSchemeOption = currentScheme.value
-    
-    suspend fun setColorScheme(scheme: ColorSchemeOption) {
+
+    suspend fun load(context: Context) {
+        val prefs = context.themeDataStore.data.first()
+        val savedName = prefs[KEY_THEME_NAME]
+        val scheme = predefinedSchemes.find { it.name == savedName } ?: predefinedSchemes[0]
         currentScheme.value = scheme
-        saveTheme(scheme)
+    }
+    
+    suspend fun setColorScheme(context: Context, scheme: ColorSchemeOption) {
+        context.themeDataStore.edit { prefs ->
+            prefs[KEY_THEME_NAME] = scheme.name
+        }
+        currentScheme.value = scheme
     }
     
     @Composable
-    fun getColorScheme(): ColorScheme {
+    fun getColorScheme(darkTheme: Boolean): ColorScheme {
         val scheme = currentScheme.value
-        return lightColorScheme(
-            primary = scheme.primary,
-            secondary = scheme.secondary,
-            tertiary = scheme.tertiary,
-            surface = scheme.surface,
-            background = scheme.background
-        )
-    }
-
-    suspend fun saveTheme(scheme: ColorSchemeOption) {
-        currentScheme.value = scheme
+        return if (darkTheme) {
+            darkColorScheme(
+                primary = scheme.primary,
+                secondary = scheme.secondary,
+                tertiary = scheme.tertiary,
+                surface = scheme.surface,
+                background = scheme.background
+            )
+        } else {
+            lightColorScheme(
+                primary = scheme.primary,
+                secondary = scheme.secondary,
+                tertiary = scheme.tertiary,
+                surface = scheme.surface,
+                background = scheme.background
+            )
+        }
     }
 }
 

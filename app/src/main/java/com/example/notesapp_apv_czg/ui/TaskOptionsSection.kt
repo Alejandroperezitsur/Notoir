@@ -28,12 +28,14 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.notesapp_apv_czg.R
+import com.example.notesapp_apv_czg.ui.theme.ColorTokens
+import com.example.notesapp_apv_czg.ui.theme.ElevationTokens
+import com.example.notesapp_apv_czg.ui.theme.ShapeTokens
 import java.text.SimpleDateFormat
 import java.util.Calendar
 
@@ -114,10 +116,11 @@ private fun TaskOptions(
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = ElevationTokens.cardLow),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
-        )
+        ),
+        shape = ShapeTokens.card
     ) {
         androidx.compose.foundation.layout.Column(modifier = Modifier.padding(16.dp)) {
             Row(
@@ -146,7 +149,7 @@ private fun PrioritySelector(priority: Int, onPriorityChange: (Int) -> Unit) {
                 imageVector = if (index <= priority) Icons.Default.Star else Icons.Default.StarBorder,
                 contentDescription = null,
                 modifier = Modifier.clickable { onPriorityChange(index) },
-                tint = if (index <= priority) Color(0xFFFFD700) else MaterialTheme.colorScheme.onSurface
+                tint = if (index <= priority) ColorTokens.favorite else MaterialTheme.colorScheme.onSurface
             )
         }
     }

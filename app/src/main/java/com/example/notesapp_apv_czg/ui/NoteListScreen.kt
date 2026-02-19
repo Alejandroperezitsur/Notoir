@@ -1,7 +1,9 @@
 package com.example.notesapp_apv_czg.ui
 
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -13,7 +15,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Notes
 import androidx.compose.material.icons.filled.*
@@ -23,10 +24,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -37,6 +39,9 @@ import coil.compose.rememberAsyncImagePainter
 import com.example.notesapp_apv_czg.R
 import com.example.notesapp_apv_czg.data.Note
 import com.example.notesapp_apv_czg.ui.components.PinDialog
+import com.example.notesapp_apv_czg.ui.theme.ColorTokens
+import com.example.notesapp_apv_czg.ui.theme.ElevationTokens
+import com.example.notesapp_apv_czg.ui.theme.ShapeTokens
 import com.example.notesapp_apv_czg.security.PinManager
 import java.text.SimpleDateFormat
 import java.util.*
@@ -94,7 +99,7 @@ fun NoteCard(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(color, RoundedCornerShape(16.dp))
+                    .background(color, ShapeTokens.card)
                     .padding(16.dp),
                 contentAlignment = Alignment.Center
             ) {
@@ -138,11 +143,14 @@ fun NoteCardContent(
     onToggleFavorite: (Note) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val haptic = LocalHapticFeedback.current
+    val checkScale = remember { Animatable(1f) }
+    val scope = rememberCoroutineScope()
     Card(
         modifier = modifier
             .fillMaxWidth()
             .clickable { onClick(note) },
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = ElevationTokens.card),
         colors = CardDefaults.cardColors(
             containerColor = if (note.isTask && note.isCompleted) {
                 MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
@@ -150,7 +158,7 @@ fun NoteCardContent(
                 MaterialTheme.colorScheme.surface
             }
         ),
-        shape = RoundedCornerShape(16.dp)
+        shape = ShapeTokens.card
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(
@@ -166,10 +174,31 @@ fun NoteCardContent(
                         Icon(
                             imageVector = if (note.isCompleted) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,
                             contentDescription = if (note.isCompleted) "Marcar como incompleta" else "Marcar como completa",
-                            tint = if (note.isCompleted) Color(0xFF4CAF50) else MaterialTheme.colorScheme.outline,
+                            tint = if (note.isCompleted) ColorTokens.taskCompleted else MaterialTheme.colorScheme.outline,
                             modifier = Modifier
                                 .size(20.dp)
-                                .clickable { onToggleComplete(note) }
+                                .scale(checkScale.value)
+                                .clickable {
+                                    scope.launch {
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        onToggleComplete(note)
+                                        checkScale.snapTo(1f)
+                                        checkScale.animateTo(
+                                            1.15f,
+                                            animationSpec = spring(
+                                                dampingRatio = Spring.DampingRatioMediumBouncy,
+                                                stiffness = Spring.StiffnessLow
+                                            )
+                                        )
+                                        checkScale.animateTo(
+                                            1f,
+                                            animationSpec = spring(
+                                                dampingRatio = Spring.DampingRatioMediumBouncy,
+                                                stiffness = Spring.StiffnessLow
+                                            )
+                                        )
+                                    }
+                                }
                         )
                         Text(
                             text = stringResource(R.string.task),
@@ -199,7 +228,7 @@ fun NoteCardContent(
                             Icon(
                                 Icons.Default.Star,
                                 contentDescription = null,
-                                tint = Color(0xFFFFD700),
+                                tint = ColorTokens.favorite,
                                 modifier = Modifier.size(16.dp)
                             )
                         }
@@ -217,7 +246,7 @@ fun NoteCardContent(
                         Icon(
                             imageVector = if (note.isFavorite) Icons.Default.Star else Icons.Default.StarBorder,
                             contentDescription = if (note.isFavorite) stringResource(R.string.remove_from_favorites) else stringResource(R.string.add_to_favorites),
-                            tint = if (note.isFavorite) Color(0xFFFFD700) else MaterialTheme.colorScheme.outline,
+                            tint = if (note.isFavorite) ColorTokens.favorite else MaterialTheme.colorScheme.outline,
                             modifier = Modifier.size(20.dp)
                         )
                     }
@@ -339,20 +368,26 @@ fun NoteListScreen(
     var pinSetTarget by remember { mutableStateOf<Note?>(null) }
     val context = LocalContext.current
 
-    val filteredNotes = notes.filter { note ->
-        val matchesSearch = note.title.contains(searchQuery, ignoreCase = true) ||
-                note.description?.contains(searchQuery, ignoreCase = true) == true
-        val matchesFilter = when (filterType) {
-            "notes" -> !note.isTask
-            "tasks" -> note.isTask
-            "favorites" -> note.isFavorite
-            else -> true
+    val filteredNotes by remember(notes, searchQuery, filterType) {
+        derivedStateOf {
+            notes.filter { note ->
+                val matchesSearch = note.title.contains(searchQuery, ignoreCase = true) ||
+                        note.description?.contains(searchQuery, ignoreCase = true) == true
+                val matchesFilter = when (filterType) {
+                    "notes" -> !note.isTask
+                    "tasks" -> note.isTask
+                    "favorites" -> note.isFavorite
+                    else -> true
+                }
+                matchesSearch && matchesFilter
+            }.sortedWith(
+                compareByDescending<Note> { it.isFavorite }
+                    .thenByDescending { it.isTask && !it.isCompleted }
+                    .thenByDescending { it.priority }
+                    .thenByDescending { it.dueDateMillis ?: 0 }
+            )
         }
-        matchesSearch && matchesFilter
-    }.sortedWith(compareByDescending<Note> { it.isFavorite }
-        .thenByDescending { it.isTask && !it.isCompleted }
-        .thenByDescending { it.priority }
-        .thenByDescending { it.dueDateMillis ?: 0 })
+    }
 
     Scaffold(
         topBar = {
@@ -412,9 +447,9 @@ fun NoteListScreen(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(horizontal = 16.dp)
+                    .padding(horizontal = com.example.notesapp_apv_czg.ui.theme.Spacing.m)
             ) {
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(com.example.notesapp_apv_czg.ui.theme.Spacing.m))
 
                 OutlinedTextField(
                     value = searchQuery,
@@ -432,7 +467,7 @@ fun NoteListScreen(
                     singleLine = true
                 )
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(com.example.notesapp_apv_czg.ui.theme.Spacing.m))
 
                 LazyRow(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -488,7 +523,7 @@ fun NoteListScreen(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(com.example.notesapp_apv_czg.ui.theme.Spacing.m))
 
                 if (filteredNotes.isEmpty()) {
                     EmptyState(hasSearch = searchQuery.isNotEmpty())

@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.Clear
@@ -28,13 +27,15 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.example.notesapp_apv_czg.ui.theme.ColorTokens
+import com.example.notesapp_apv_czg.ui.theme.ElevationTokens
+import com.example.notesapp_apv_czg.ui.theme.ShapeTokens
 import com.example.notesapp_apv_czg.R
 
 @Composable
@@ -102,10 +103,10 @@ private fun AttachmentPreviewItem(
     Box {
         Card(
             modifier = Modifier.size(96.dp),
-            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+            elevation = CardDefaults.cardElevation(defaultElevation = ElevationTokens.card),
             colors = CardDefaults.cardColors(
                 containerColor = when {
-                    isAudio -> Color(0xFF4ECDC4).copy(alpha = 0.1f)
+                    isAudio -> ColorTokens.info.copy(alpha = 0.08f)
                     isImage -> MaterialTheme.colorScheme.surfaceVariant
                     else -> MaterialTheme.colorScheme.secondaryContainer
                 }
@@ -154,7 +155,7 @@ private fun AttachmentPreviewItem(
                             .align(Alignment.BottomStart)
                             .padding(4.dp)
                             .background(
-                                Color.Black.copy(alpha = 0.7f),
+                                MaterialTheme.colorScheme.scrim.copy(alpha = 0.7f),
                                 RoundedCornerShape(4.dp)
                             )
                             .padding(horizontal = 4.dp, vertical = 2.dp)
@@ -166,7 +167,7 @@ private fun AttachmentPreviewItem(
                                 else -> stringResource(R.string.attachment_file_label)
                             },
                             style = MaterialTheme.typography.labelSmall,
-                            color = Color.White,
+                            color = MaterialTheme.colorScheme.onPrimary,
                             fontSize = 8.sp
                         )
                     }

@@ -12,6 +12,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -24,23 +25,29 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.res.stringResource
 import com.example.notesapp_apv_czg.R
-import com.example.notesapp_apv_czg.data.Note
+import com.example.notesapp_apv_czg.security.VaultState
+import kotlinx.coroutines.flow.StateFlow
 import com.example.notesapp_apv_czg.ui.components.AttachmentViewer
-import com.example.notesapp_apv_czg.ui.components.PinDialog
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NoteDetailScreen(
     noteId: Long,
     viewModel: NoteViewModel,
+    vaultState: StateFlow<VaultState>,
     onBack: () -> Unit,
-    onEdit: (Long) -> Unit
+    onEdit: (Long) -> Unit,
+    onRequestUnlock: (onResult: (Boolean) -> Unit) -> Unit
 ) {
     LaunchedEffect(noteId) {
         viewModel.getNoteById(noteId)
@@ -84,6 +91,7 @@ fun NoteDetailScreen(
             )
         }
     ) { paddingValues ->
+        val haptic = LocalHapticFeedback.current
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -100,22 +108,38 @@ fun NoteDetailScreen(
                 return@Column
             }
 
-            // If locked, show unlock dialog flow before rendering content
-            var showUnlock by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(note.isLocked) }
+            val vault by vaultState.collectAsState()
+            var isUnlocked by remember(note.id) { mutableStateOf(false) }
 
-            if (showUnlock) {
-                PinDialog(
-                    onSuccess = {
-                        showUnlock = false
-                        val unlocked = note.copy(isLocked = false)
-                        viewModel.update(unlocked)
-                    },
-                    onCancel = { onBack() },
-                    title = stringResource(R.string.unlock_note_title)
-                )
+            LaunchedEffect(vault) {
+                if (vault is VaultState.Locked) {
+                    isUnlocked = false
+                }
             }
 
-            if (!showUnlock) {
+            if (note.isLocked && !isUnlocked) {
+                Text(
+                    text = "🔐 Nota protegida",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onBackground
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                androidx.compose.material3.Button(
+                    onClick = {
+                        onRequestUnlock { success ->
+                            if (success) {
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                isUnlocked = true
+                            }
+                        }
+                    }
+                ) {
+                    Text(
+                        text = "Desbloquear",
+                        style = MaterialTheme.typography.labelLarge
+                    )
+                }
+            } else {
                 // Description/content
                 note.description?.takeIf { it.isNotEmpty() }?.let { description ->
                     Text(

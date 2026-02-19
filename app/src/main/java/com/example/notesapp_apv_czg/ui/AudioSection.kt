@@ -29,7 +29,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -205,7 +204,7 @@ fun handleRecordClick(
     audioFile: File?,
     onIsRecordingChange: (Boolean) -> Unit,
     onAudioFileChange: (File?) -> Unit,
-    attachmentUris: SnapshotStateList<String>,
+    onAttachmentAdded: (String) -> Unit,
     scaffoldState: BottomSheetScaffoldState,
     snackbarHostState: SnackbarHostState,
     scope: CoroutineScope
@@ -219,7 +218,7 @@ fun handleRecordClick(
                 "${context.packageName}.provider",
                 file
             )
-            attachmentUris.add(uri.toString())
+            onAttachmentAdded(uri.toString())
         }
         onAudioFileChange(null)
         scope.launch { scaffoldState.bottomSheetState.partialExpand() }

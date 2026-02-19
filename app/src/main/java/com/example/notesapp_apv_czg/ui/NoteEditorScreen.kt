@@ -28,7 +28,6 @@ import androidx.compose.material3.BottomSheetScaffold
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -44,15 +43,12 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
@@ -70,6 +66,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.io.File
 import java.util.UUID
+import com.example.notesapp_apv_czg.ui.theme.ColorTokens
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -95,17 +92,25 @@ fun NoteEditorScreen(
         }
     }
 
-    var title by remember { mutableStateOf("") }
-    var description by remember { mutableStateOf(TextFieldValue("")) }
-    var isTask by remember { mutableStateOf(false) }
-    var isCompleted by remember { mutableStateOf(false) }
-    var priority by remember { mutableStateOf(0) }
-    var dueDateMillis by remember { mutableStateOf<Long?>(null) }
-    val attachmentUris: SnapshotStateList<String> = remember { mutableStateListOf() }
-    var isLocked by remember { mutableStateOf(currentNote?.isLocked ?: false) }
-    val tags: SnapshotStateList<String> = remember { mutableStateListOf() }
+    var editorState by remember {
+        mutableStateOf(
+            EditorUiState(
+                mode = EditorMode.NoteMode,
+                title = TextFieldValue(""),
+                body = TextFieldValue(""),
+                isLocked = false,
+                isCompleted = false,
+                priority = 0,
+                hasReminder = false,
+                reminderDate = null,
+                attachments = emptyList(),
+                tags = emptyList(),
+                isFavorite = false,
+                isSaving = false
+            )
+        )
+    }
     var newTag by remember { mutableStateOf("") }
-    var isFavorite by remember { mutableStateOf(currentNote?.isFavorite ?: false) }
     var isRecording by remember { mutableStateOf(false) }
     var audioFile by remember { mutableStateOf<File?>(null) }
     val audioRecorder = remember { AudioRecorder(context) }
@@ -126,18 +131,20 @@ fun NoteEditorScreen(
 
     LaunchedEffect(currentNote) {
         currentNote?.let { note ->
-            title = note.title
-            description = TextFieldValue(note.description ?: "")
-            isTask = note.isTask
-            isCompleted = note.isCompleted
-            priority = note.priority
-            dueDateMillis = note.dueDateMillis
-            attachmentUris.clear()
-            attachmentUris.addAll(note.attachmentUris)
-            isLocked = note.isLocked
-            tags.clear()
-            tags.addAll(note.tags)
-            isFavorite = note.isFavorite
+            editorState = EditorUiState(
+                mode = if (note.isTask) EditorMode.TaskMode else EditorMode.NoteMode,
+                title = TextFieldValue(note.title),
+                body = TextFieldValue(note.description ?: ""),
+                isLocked = note.isLocked,
+                isCompleted = note.isCompleted,
+                priority = note.priority,
+                hasReminder = note.dueDateMillis != null,
+                reminderDate = note.dueDateMillis,
+                attachments = note.attachmentUris.map { AttachmentUiModel(it) },
+                tags = note.tags,
+                isFavorite = note.isFavorite,
+                isSaving = isSaving
+            )
             originalNote.value = note
         } ?: run {
             if (isNewNote) {
@@ -174,7 +181,11 @@ fun NoteEditorScreen(
     val galleryLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri ->
-        uri?.let { attachmentUris.add(it.toString()) }
+        uri?.let {
+            editorState = editorState.copy(
+                attachments = editorState.attachments + AttachmentUiModel(it.toString())
+            )
+        }
     }
 
     val cameraLauncher = rememberLauncherForActivityResult(
@@ -187,36 +198,49 @@ fun NoteEditorScreen(
     val audioLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri ->
-        uri?.let { attachmentUris.add(it.toString()) }
+        uri?.let {
+            editorState = editorState.copy(
+                attachments = editorState.attachments + AttachmentUiModel(it.toString())
+            )
+        }
     }
 
     fun buildDraftNote(existingId: Long?): Note {
+        val attachmentUris = editorState.attachments.map { it.uri }
         return Note(
             id = existingId ?: 0,
-            title = title,
-            description = description.text,
-            isTask = isTask,
-            isCompleted = isCompleted,
-            priority = priority,
-            dueDateMillis = dueDateMillis,
-            attachmentUris = attachmentUris.toList(),
-            isLocked = isLocked,
-            tags = tags.toList(),
-            isFavorite = isFavorite
+            title = editorState.title.text,
+            description = editorState.body.text,
+            isTask = editorState.mode is EditorMode.TaskMode,
+            isCompleted = editorState.isCompleted,
+            priority = editorState.priority,
+            dueDateMillis = editorState.reminderDate,
+            attachmentUris = attachmentUris,
+            isLocked = editorState.isLocked,
+            tags = editorState.tags,
+            isFavorite = editorState.isFavorite
         )
     }
 
-    val isDirty = originalNote.value?.let { original ->
-        val draft = buildDraftNote(if (isNewNote) 0 else original.id)
-        draft != original
-    } ?: (title.isNotEmpty() ||
-            description.text.isNotEmpty() ||
-            isTask || isCompleted || priority != 0 ||
-            dueDateMillis != null ||
-            attachmentUris.isNotEmpty() ||
-            isLocked ||
-            tags.isNotEmpty() ||
-            isFavorite)
+    val isDirty by remember(editorState, originalNote.value, isNewNote) {
+        androidx.compose.runtime.derivedStateOf {
+            originalNote.value?.let { original ->
+                val draft = buildDraftNote(if (isNewNote) 0 else original.id)
+                draft != original
+            } ?: (
+                editorState.title.text.isNotEmpty() ||
+                    editorState.body.text.isNotEmpty() ||
+                    editorState.mode is EditorMode.TaskMode ||
+                    editorState.isCompleted ||
+                    editorState.priority != 0 ||
+                    editorState.reminderDate != null ||
+                    editorState.attachments.isNotEmpty() ||
+                    editorState.isLocked ||
+                    editorState.tags.isNotEmpty() ||
+                    editorState.isFavorite
+                )
+        }
+    }
 
     fun saveNoteInternal() {
         val baseId = currentNote?.id
@@ -234,13 +258,38 @@ fun NoteEditorScreen(
     fun createImageUri(): Uri {
         val imageFile = File(context.cacheDir, "camera_${UUID.randomUUID()}.jpg")
         val uri = FileProvider.getUriForFile(context, "${context.packageName}.provider", imageFile)
-        attachmentUris.add(uri.toString())
+        editorState = editorState.copy(
+            attachments = editorState.attachments + AttachmentUiModel(uri.toString())
+        )
         return uri
+    }
+
+    fun onEditorStateChange(newState: EditorUiState) {
+        editorState = newState
     }
 
     BottomSheetScaffold(
         scaffoldState = scaffoldState,
-        snackbarHost = { SnackbarHost(snackbarHostState) },
+        snackbarHost = { hostState ->
+            SnackbarHost(hostState) { data ->
+                androidx.compose.material3.Snackbar(
+                    containerColor = MaterialTheme.colorScheme.errorContainer,
+                    contentColor = MaterialTheme.colorScheme.onErrorContainer
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Save,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onErrorContainer
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(text = data.visuals.message)
+                    }
+                }
+            }
+        },
         topBar = {
             TopAppBar(
                 title = {
@@ -271,17 +320,19 @@ fun NoteEditorScreen(
                 },
                 actions = {
                     SecuritySection(
-                        isLocked = isLocked,
-                        onLockedChange = { isLocked = it },
+                        isLocked = editorState.isLocked,
+                        onLockedChange = { locked ->
+                            editorState = editorState.copy(isLocked = locked)
+                        },
                         isNewNote = isNewNote,
                         currentNote = currentNote,
-                        title = title,
-                        description = description,
-                        isTask = isTask,
-                        isCompleted = isCompleted,
-                        priority = priority,
-                        dueDateMillis = dueDateMillis,
-                        attachmentUris = attachmentUris,
+                        title = editorState.title.text,
+                        description = editorState.body,
+                        mode = editorState.mode,
+                        isCompleted = editorState.isCompleted,
+                        priority = editorState.priority,
+                        dueDateMillis = editorState.reminderDate,
+                        attachmentUris = editorState.attachments.map { it.uri },
                         viewModel = viewModel
                     )
                     if (isSaving) {
@@ -329,7 +380,11 @@ fun NoteEditorScreen(
                         audioFile = audioFile,
                         onIsRecordingChange = { isRecording = it },
                         onAudioFileChange = { audioFile = it },
-                        attachmentUris = attachmentUris,
+                        onAttachmentAdded = { uriString ->
+                            editorState = editorState.copy(
+                                attachments = editorState.attachments + AttachmentUiModel(uriString)
+                            )
+                        },
                         scaffoldState = scaffoldState,
                         snackbarHostState = snackbarHostState,
                         scope = scope
@@ -347,126 +402,20 @@ fun NoteEditorScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 20.dp)
-                    .verticalScroll(rememberScrollState())
-            ) {
-                Spacer(modifier = Modifier.height(16.dp))
-
-                TaskOptionsSection(
-                    isTask = isTask,
-                    onIsTaskChange = { isTask = it },
-                    isCompleted = isCompleted,
-                    onIsCompletedChange = { isCompleted = it },
-                    priority = priority,
-                    onPriorityChange = { priority = it },
-                    dueDateMillis = dueDateMillis,
-                    onDueDateChange = { dueDateMillis = it }
-                )
-
-                Spacer(modifier = Modifier.height(20.dp))
-
-                EditorTextSection(
-                    title = title,
-                    onTitleChange = { title = it },
-                    description = description,
-                    onDescriptionChange = { description = it },
-                    isLocked = isLocked,
-                    onBold = {
-                        if (isLocked) return@EditorTextSection
-                        val selection = description.selection
-                        if (!selection.collapsed) {
-                            val builder = AnnotatedString.Builder(description.annotatedString)
-                            builder.addStyle(
-                                SpanStyle(fontWeight = FontWeight.Bold),
-                                selection.min,
-                                selection.max
-                            )
-                            description =
-                                description.copy(annotatedString = builder.toAnnotatedString())
-                        }
-                    },
-                    onItalic = {
-                        if (isLocked) return@EditorTextSection
-                        val selection = description.selection
-                        if (!selection.collapsed) {
-                            val builder = AnnotatedString.Builder(description.annotatedString)
-                            builder.addStyle(
-                                SpanStyle(fontStyle = FontStyle.Italic),
-                                selection.min,
-                                selection.max
-                            )
-                            description =
-                                description.copy(annotatedString = builder.toAnnotatedString())
-                        }
-                    },
-                    onChecklist = {
-                        if (isLocked) return@EditorTextSection
-                        val selection = description.selection
-                        val lineStart = description.text.lastIndexOf('\n', selection.start - 1)
-                            .let { if (it < 0) 0 else it + 1 }
-                        val newText = description.text.substring(
-                            0,
-                            lineStart
-                        ) + "☐ " + description.text.substring(lineStart)
-                        description = TextFieldValue(
-                            text = newText,
-                            selection = TextRange(selection.start + 2)
-                        )
-                    },
-                    onBullet = {
-                        if (isLocked) return@EditorTextSection
-                        val selection = description.selection
-                        val lineStart = description.text.lastIndexOf('\n', selection.start - 1)
-                            .let { if (it < 0) 0 else it + 1 }
-                        val newText = description.text.substring(
-                            0,
-                            lineStart
-                        ) + "• " + description.text.substring(lineStart)
-                        description = TextFieldValue(
-                            text = newText,
-                            selection = TextRange(selection.start + 2)
-                        )
-                    }
-                )
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                TagSection(
-                    tags = tags,
+            if (editorState.mode is EditorMode.TaskMode) {
+                TaskEditorContent(
+                    editorState = editorState,
+                    onEditorStateChange = ::onEditorStateChange,
                     newTag = newTag,
-                    onNewTagChange = { newTag = it },
-                    onAddTag = {
-                        if (newTag.isNotBlank() && !tags.contains(newTag.trim())) {
-                            tags.add(newTag.trim())
-                            newTag = ""
-                        }
-                    },
-                    onRemoveTag = { tag -> tags.remove(tag) },
-                    enabled = !isLocked
+                    onNewTagChange = { newTag = it }
                 )
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                FavoriteSection(
-                    isFavorite = isFavorite,
-                    onToggle = { isFavorite = it },
-                    enabled = !isLocked
+            } else {
+                NoteEditorContent(
+                    editorState = editorState,
+                    onEditorStateChange = ::onEditorStateChange,
+                    newTag = newTag,
+                    onNewTagChange = { newTag = it }
                 )
-
-                if (attachmentUris.isNotEmpty()) {
-                    Spacer(modifier = Modifier.height(16.dp))
-                    AttachmentsSection(
-                        attachmentUris = attachmentUris,
-                        onRemoveAttachment = { uri ->
-                            attachmentUris.remove(uri)
-                        }
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(100.dp))
             }
 
             Row(
@@ -475,7 +424,7 @@ fun NoteEditorScreen(
                     .padding(16.dp),
                 horizontalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                FloatingActionButton(
+                androidx.compose.material3.FloatingActionButton(
                     onClick = {
                         scope.launch {
                             val sheetState = scaffoldState.bottomSheetState
@@ -486,8 +435,8 @@ fun NoteEditorScreen(
                             }
                         }
                     },
-                    containerColor = MaterialTheme.colorScheme.secondary,
-                    contentColor = Color.White,
+                    containerColor = ColorTokens.accent,
+                    contentColor = MaterialTheme.colorScheme.onSecondary,
                     modifier = Modifier.size(56.dp)
                 ) {
                     Icon(
@@ -499,8 +448,8 @@ fun NoteEditorScreen(
 
                 ExtendedFloatingActionButton(
                     onClick = { if (!isSaving) saveNoteInternal() },
-                    containerColor = Color(0xFF128C7E),
-                    contentColor = Color.White,
+                    containerColor = ColorTokens.success,
+                    contentColor = MaterialTheme.colorScheme.onTertiary,
                     enabled = !isSaving
                 ) {
                     Icon(
@@ -538,5 +487,200 @@ fun NoteEditorScreen(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun NoteEditorContent(
+    editorState: EditorUiState,
+    onEditorStateChange: (EditorUiState) -> Unit,
+    newTag: String,
+    onNewTagChange: (String) -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 20.dp)
+            .verticalScroll(rememberScrollState())
+    ) {
+        Spacer(modifier = Modifier.height(16.dp))
+
+        EditorTextSection(
+            title = editorState.title,
+            onTitleChange = { value ->
+                onEditorStateChange(editorState.copy(title = value))
+            },
+            description = editorState.body,
+            onDescriptionChange = { value ->
+                onEditorStateChange(editorState.copy(body = value))
+            },
+            isLocked = editorState.isLocked,
+            onBold = {
+                if (editorState.isLocked) return@EditorTextSection
+                val description = editorState.body
+                val selection = description.selection
+                if (!selection.collapsed) {
+                    val builder = AnnotatedString.Builder(description.annotatedString)
+                    builder.addStyle(
+                        SpanStyle(fontWeight = FontWeight.Bold),
+                        selection.min,
+                        selection.max
+                    )
+                    onEditorStateChange(
+                        editorState.copy(body = description.copy(annotatedString = builder.toAnnotatedString()))
+                    )
+                }
+            },
+            onItalic = {
+                if (editorState.isLocked) return@EditorTextSection
+                val description = editorState.body
+                val selection = description.selection
+                if (!selection.collapsed) {
+                    val builder = AnnotatedString.Builder(description.annotatedString)
+                    builder.addStyle(
+                        SpanStyle(fontStyle = FontStyle.Italic),
+                        selection.min,
+                        selection.max
+                    )
+                    onEditorStateChange(
+                        editorState.copy(body = description.copy(annotatedString = builder.toAnnotatedString()))
+                    )
+                }
+            },
+            onChecklist = {
+                if (editorState.isLocked) return@EditorTextSection
+                val description = editorState.body
+                val selection = description.selection
+                val lineStart = description.text.lastIndexOf('\n', selection.start - 1)
+                    .let { if (it < 0) 0 else it + 1 }
+                val newText = description.text.substring(0, lineStart) +
+                        "☐ " + description.text.substring(lineStart)
+                onEditorStateChange(
+                    editorState.copy(
+                        body = TextFieldValue(
+                            text = newText,
+                            selection = TextRange(selection.start + 2)
+                        )
+                    )
+                )
+            },
+            onBullet = {
+                if (editorState.isLocked) return@EditorTextSection
+                val description = editorState.body
+                val selection = description.selection
+                val lineStart = description.text.lastIndexOf('\n', selection.start - 1)
+                    .let { if (it < 0) 0 else it + 1 }
+                val newText = description.text.substring(0, lineStart) +
+                        "• " + description.text.substring(lineStart)
+                onEditorStateChange(
+                    editorState.copy(
+                        body = TextFieldValue(
+                            text = newText,
+                            selection = TextRange(selection.start + 2)
+                        )
+                    )
+                )
+            }
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        TagSection(
+            tags = editorState.tags,
+            newTag = newTag,
+            onNewTagChange = onNewTagChange,
+            onAddTag = {
+                val value = newTag.trim()
+                if (value.isNotEmpty() && !editorState.tags.contains(value)) {
+                    onEditorStateChange(editorState.copy(tags = editorState.tags + value))
+                    onNewTagChange("")
+                }
+            },
+            onRemoveTag = { tag ->
+                onEditorStateChange(editorState.copy(tags = editorState.tags.filter { it != tag }))
+            },
+            enabled = !editorState.isLocked
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        FavoriteSection(
+            isFavorite = editorState.isFavorite,
+            onToggle = { favorite ->
+                onEditorStateChange(editorState.copy(isFavorite = favorite))
+            },
+            enabled = !editorState.isLocked
+        )
+
+        val attachmentUris = editorState.attachments.map { it.uri }
+        if (attachmentUris.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(16.dp))
+            AttachmentsSection(
+                attachmentUris = attachmentUris,
+                onRemoveAttachment = { uri ->
+                    onEditorStateChange(
+                        editorState.copy(
+                            attachments = editorState.attachments.filterNot { it.uri == uri }
+                        )
+                    )
+                }
+            )
+        }
+
+        Spacer(modifier = Modifier.height(100.dp))
+    }
+}
+
+@Composable
+private fun TaskEditorContent(
+    editorState: EditorUiState,
+    onEditorStateChange: (EditorUiState) -> Unit,
+    newTag: String,
+    onNewTagChange: (String) -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 20.dp)
+            .verticalScroll(rememberScrollState())
+    ) {
+        Spacer(modifier = Modifier.height(16.dp))
+
+        TaskOptionsSection(
+            isTask = editorState.mode is EditorMode.TaskMode,
+            onIsTaskChange = { isTask ->
+                onEditorStateChange(
+                    editorState.copy(
+                        mode = if (isTask) EditorMode.TaskMode else EditorMode.NoteMode
+                    )
+                )
+            },
+            isCompleted = editorState.isCompleted,
+            onIsCompletedChange = { completed ->
+                onEditorStateChange(editorState.copy(isCompleted = completed))
+            },
+            priority = editorState.priority,
+            onPriorityChange = { priority ->
+                onEditorStateChange(editorState.copy(priority = priority))
+            },
+            dueDateMillis = editorState.reminderDate,
+            onDueDateChange = { newDate ->
+                onEditorStateChange(
+                    editorState.copy(
+                        hasReminder = newDate != null,
+                        reminderDate = newDate
+                    )
+                )
+            }
+        )
+
+        Spacer(modifier = Modifier.height(20.dp))
+
+        NoteEditorContent(
+            editorState = editorState,
+            onEditorStateChange = onEditorStateChange,
+            newTag = newTag,
+            onNewTagChange = onNewTagChange
+        )
     }
 }

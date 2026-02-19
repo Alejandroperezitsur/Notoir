@@ -28,18 +28,17 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.notesapp_apv_czg.ui.theme.ColorTokens
 
 @Composable
 fun TagSection(
-    tags: SnapshotStateList<String>,
+    tags: List<String>,
     newTag: String,
     onNewTagChange: (String) -> Unit,
     onAddTag: () -> Unit,
@@ -112,7 +111,7 @@ fun TagSection(
                     Icon(
                         Icons.Default.Add,
                         contentDescription = "Agregar etiqueta",
-                        tint = Color.White,
+                        tint = ColorTokens.accent,
                         modifier = Modifier.size(20.dp)
                     )
                 }
@@ -159,7 +158,7 @@ fun FavoriteSection(
             Icon(
                 imageVector = if (isFavorite) Icons.Default.Star else Icons.Default.StarBorder,
                 contentDescription = if (isFavorite) "Quitar de favoritos" else "Agregar a favoritos",
-                tint = if (isFavorite) Color(0xFFFFD700) else MaterialTheme.colorScheme.onSurface,
+                tint = if (isFavorite) ColorTokens.favorite else MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.size(24.dp)
             )
 
@@ -216,4 +215,3 @@ private fun TagChip(
         }
     }
 }
-
