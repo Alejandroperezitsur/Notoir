@@ -38,22 +38,31 @@ object ThemeManager {
     
     @Composable
     fun getColorScheme(darkTheme: Boolean): ColorScheme {
-        val scheme = currentScheme.value
         return if (darkTheme) {
             darkColorScheme(
-                primary = scheme.primary,
-                secondary = scheme.secondary,
-                tertiary = scheme.tertiary,
-                surface = scheme.surface,
-                background = scheme.background
+                primary = DarkPrimary,
+                onPrimary = DarkOnPrimary,
+                secondary = DarkSecondary,
+                onSecondary = DarkOnSecondary,
+                background = DarkBackground,
+                onBackground = DarkOnBackground,
+                surface = DarkSurface,
+                onSurface = DarkOnSurface,
+                error = DarkError,
+                onError = DarkOnError
             )
         } else {
             lightColorScheme(
-                primary = scheme.primary,
-                secondary = scheme.secondary,
-                tertiary = scheme.tertiary,
-                surface = scheme.surface,
-                background = scheme.background
+                primary = LightPrimary,
+                onPrimary = LightOnPrimary,
+                secondary = LightSecondary,
+                onSecondary = LightOnSecondary,
+                background = LightBackground,
+                onBackground = LightOnBackground,
+                surface = LightSurface,
+                onSurface = LightOnSurface,
+                error = LightError,
+                onError = LightOnError
             )
         }
     }

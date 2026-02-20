@@ -13,19 +13,33 @@ android {
         applicationId = "com.example.notesapp_apv_czg"
         minSdk = 24
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "1.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    signingConfigs {
+        create("release") {
+            val keystorePath = project.findProperty("RELEASE_STORE_FILE") as String? ?: ""
+            if (keystorePath.isNotEmpty()) {
+                storeFile = file(keystorePath)
+            }
+            storePassword = project.findProperty("RELEASE_STORE_PASSWORD") as String? ?: ""
+            keyAlias = project.findProperty("RELEASE_KEY_ALIAS") as String? ?: ""
+            keyPassword = project.findProperty("RELEASE_KEY_PASSWORD") as String? ?: ""
+        }
+    }
+
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            signingConfig = signingConfigs.getByName("release")
         }
     }
     compileOptions {

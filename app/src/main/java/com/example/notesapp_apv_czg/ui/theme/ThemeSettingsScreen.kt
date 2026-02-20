@@ -40,12 +40,12 @@ val predefinedSchemes = listOf(
         primary = Color(0xFF6200EE),
         secondary = Color(0xFF03DAC6),
         tertiary = Color(0xFF6B38FB),
-        surface = Color.White,
+        surface = Color(0xFFFFFFFF),
         background = Color(0xFFF5F5F5)
     ),
     ColorSchemeOption(
         "Oscuro",
-        primary = Color(0xFFD0BCFF), // Más brillante para mejor contraste
+        primary = Color(0xFFD0BCFF),
         secondary = Color(0xFF9FD8E6),
         tertiary = Color(0xFFB4A0FF),
         surface = Color(0xFF1C1B1F),
@@ -135,7 +135,11 @@ fun ThemeSettingsScreen(
                             contentDescription = "Volver"
                         )
                     }
-                }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(3.dp),
+                    titleContentColor = MaterialTheme.colorScheme.onSurface
+                )
             )
         }
     ) { paddingValues ->
@@ -143,7 +147,7 @@ fun ThemeSettingsScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .padding(16.dp)
+                .padding(horizontal = 20.dp, vertical = 16.dp)
         ) {
             Text(
                 text = "Elige un esquema de colores",

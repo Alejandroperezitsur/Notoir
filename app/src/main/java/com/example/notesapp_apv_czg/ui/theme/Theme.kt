@@ -7,9 +7,18 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Shapes
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.unit.dp
+
+private val AppShapes = Shapes(
+    small = RoundedCornerShape(8.dp),
+    medium = RoundedCornerShape(14.dp),
+    large = RoundedCornerShape(20.dp)
+)
 
 @OptIn(ExperimentalAnimationApi::class)
 @Composable
@@ -33,6 +42,7 @@ fun NotesAppAPVCZGTheme(
         MaterialTheme(
             colorScheme = ThemeManager.getColorScheme(isDark),
             typography = Typography,
+            shapes = AppShapes,
             content = content
         )
     }

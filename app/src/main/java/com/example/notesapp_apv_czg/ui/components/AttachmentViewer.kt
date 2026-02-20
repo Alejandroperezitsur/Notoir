@@ -45,7 +45,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -151,7 +150,7 @@ private fun AttachmentItem(
                         .padding(8.dp)
                         .size(28.dp),
                     shape = CircleShape,
-                    color = Color.Black.copy(alpha = 0.6f)
+                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.8f)
                 ) {
                     IconButton(
                         onClick = onRemove,
@@ -160,7 +159,7 @@ private fun AttachmentItem(
                         Icon(
                             Icons.Default.Close,
                             contentDescription = stringResource(R.string.remove_attachment),
-                            tint = Color.White,
+                            tint = MaterialTheme.colorScheme.onSurface,
                             modifier = Modifier.size(16.dp)
                         )
                     }
@@ -229,11 +228,11 @@ private fun AudioPlayer(
             modifier = Modifier.fillMaxWidth()
         ) {
             // Play/Pause button
-            Surface(
-                modifier = Modifier.size(48.dp),
-                shape = CircleShape,
-                color = MaterialTheme.colorScheme.primary
-            ) {
+                Surface(
+                    modifier = Modifier.size(48.dp),
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.primary
+                ) {
                 IconButton(
                     onClick = {
                         mediaPlayer?.let { mp ->
@@ -250,7 +249,7 @@ private fun AudioPlayer(
                     Icon(
                         imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                         contentDescription = if (isPlaying) "Pause" else "Play",
-                        tint = Color.White,
+                        tint = MaterialTheme.colorScheme.onPrimary,
                         modifier = Modifier.size(24.dp)
                     )
                 }

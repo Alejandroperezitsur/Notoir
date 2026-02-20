@@ -21,7 +21,9 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.surfaceColorAtElevation
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -35,6 +37,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.res.stringResource
 import com.example.notesapp_apv_czg.R
+import com.example.notesapp_apv_czg.security.NoteCrypto
 import com.example.notesapp_apv_czg.security.VaultState
 import kotlinx.coroutines.flow.StateFlow
 import com.example.notesapp_apv_czg.ui.components.AttachmentViewer
@@ -45,6 +48,7 @@ fun NoteDetailScreen(
     noteId: Long,
     viewModel: NoteViewModel,
     vaultState: StateFlow<VaultState>,
+    noteCrypto: NoteCrypto,
     onBack: () -> Unit,
     onEdit: (Long) -> Unit,
     onRequestUnlock: (onResult: (Boolean) -> Unit) -> Unit
@@ -54,13 +58,38 @@ fun NoteDetailScreen(
     }
 
     val currentNote by viewModel.currentNote.collectAsState()
+    val vault by vaultState.collectAsState()
+    val haptic = LocalHapticFeedback.current
+    var decryptedTitle by remember(currentNote?.id) { mutableStateOf<String?>(null) }
+    var decryptedBody by remember(currentNote?.id) { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(vault) {
+        if (vault is VaultState.Locked) {
+            decryptedTitle = null
+            decryptedBody = null
+        }
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            decryptedTitle = null
+            decryptedBody = null
+        }
+    }
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = {
+                    val note = currentNote
+                    val titleText = when {
+                        note == null -> stringResource(R.string.note)
+                        note.isLocked && decryptedTitle != null -> decryptedTitle!!
+                        note.isLocked -> stringResource(R.string.note)
+                        else -> note.title
+                    }
                     Text(
-                        text = currentNote?.title ?: stringResource(R.string.note),
+                        text = titleText,
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.SemiBold
                     )
@@ -75,7 +104,24 @@ fun NoteDetailScreen(
                 },
                 actions = {
                     IconButton(
-                        onClick = { currentNote?.let { onEdit(it.id) } },
+                        onClick = {
+                            val note = currentNote
+                            if (note != null) {
+                                if (!note.isLocked || vault is VaultState.Unlocked) {
+                                    onEdit(note.id)
+                                    val hapticLocal = LocalHapticFeedback.current
+                                    hapticLocal.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                } else {
+                                    onRequestUnlock { success ->
+                                        if (success) {
+                                            onEdit(note.id)
+                                            val hapticLocal = LocalHapticFeedback.current
+                                            hapticLocal.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                        }
+                                    }
+                                }
+                            }
+                        },
                         enabled = currentNote != null
                     ) {
                         Icon(
@@ -85,13 +131,12 @@ fun NoteDetailScreen(
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
+                    containerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(3.dp),
                     titleContentColor = MaterialTheme.colorScheme.onSurface
                 )
             )
         }
     ) { paddingValues ->
-        val haptic = LocalHapticFeedback.current
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -107,19 +152,9 @@ fun NoteDetailScreen(
                 Text(text = stringResource(R.string.search_notes))
                 return@Column
             }
-
-            val vault by vaultState.collectAsState()
-            var isUnlocked by remember(note.id) { mutableStateOf(false) }
-
-            LaunchedEffect(vault) {
-                if (vault is VaultState.Locked) {
-                    isUnlocked = false
-                }
-            }
-
-            if (note.isLocked && !isUnlocked) {
+            if (note.isLocked && vault is VaultState.Locked) {
                 Text(
-                    text = "🔐 Nota protegida",
+                    text = stringResource(R.string.locked_note),
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onBackground
                 )
@@ -128,8 +163,14 @@ fun NoteDetailScreen(
                     onClick = {
                         onRequestUnlock { success ->
                             if (success) {
-                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                isUnlocked = true
+                                try {
+                                    val decTitle = noteCrypto.decrypt(note.title)
+                                    val decBody = note.description?.let { d -> noteCrypto.decrypt(d) }
+                                    decryptedTitle = decTitle
+                                    decryptedBody = decBody
+                                    haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                } catch (_: Exception) {
+                                }
                             }
                         }
                     }
@@ -141,7 +182,12 @@ fun NoteDetailScreen(
                 }
             } else {
                 // Description/content
-                note.description?.takeIf { it.isNotEmpty() }?.let { description ->
+                val bodyText = when {
+                    note.isLocked && decryptedBody != null -> decryptedBody
+                    !note.isLocked -> note.description
+                    else -> null
+                }
+                bodyText?.takeIf { it.isNotEmpty() }?.let { description ->
                     Text(
                         text = description,
                         style = MaterialTheme.typography.bodyLarge,

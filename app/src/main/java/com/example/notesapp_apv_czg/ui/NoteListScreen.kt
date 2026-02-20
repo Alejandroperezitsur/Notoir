@@ -2,8 +2,9 @@ package com.example.notesapp_apv_czg.ui
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -11,6 +12,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.animateItemPlacement
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -19,6 +21,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Notes
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import androidx.compose.material3.surfaceColorAtElevation
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -35,6 +38,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.graphicsLayer
 import coil.compose.rememberAsyncImagePainter
 import com.example.notesapp_apv_czg.R
 import com.example.notesapp_apv_czg.data.Note
@@ -145,10 +149,22 @@ fun NoteCardContent(
 ) {
     val haptic = LocalHapticFeedback.current
     val checkScale = remember { Animatable(1f) }
+    val favoriteScale = remember { Animatable(1f) }
     val scope = rememberCoroutineScope()
+    LaunchedEffect(note.isFavorite) {
+        favoriteScale.snapTo(0.97f)
+        favoriteScale.animateTo(
+            targetValue = 1f,
+            animationSpec = tween(durationMillis = 150, easing = FastOutSlowInEasing)
+        )
+    }
     Card(
         modifier = modifier
             .fillMaxWidth()
+            .graphicsLayer(
+                scaleX = favoriteScale.value,
+                scaleY = favoriteScale.value
+            )
             .clickable { onClick(note) },
         elevation = CardDefaults.cardElevation(defaultElevation = ElevationTokens.card),
         colors = CardDefaults.cardColors(
@@ -184,17 +200,17 @@ fun NoteCardContent(
                                         onToggleComplete(note)
                                         checkScale.snapTo(1f)
                                         checkScale.animateTo(
-                                            1.15f,
-                                            animationSpec = spring(
-                                                dampingRatio = Spring.DampingRatioMediumBouncy,
-                                                stiffness = Spring.StiffnessLow
+                                            1.05f,
+                                            animationSpec = tween(
+                                                durationMillis = 180,
+                                                easing = FastOutSlowInEasing
                                             )
                                         )
                                         checkScale.animateTo(
                                             1f,
-                                            animationSpec = spring(
-                                                dampingRatio = Spring.DampingRatioMediumBouncy,
-                                                stiffness = Spring.StiffnessLow
+                                            animationSpec = tween(
+                                                durationMillis = 180,
+                                                easing = FastOutSlowInEasing
                                             )
                                         )
                                     }
@@ -410,7 +426,7 @@ fun NoteListScreen(
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
+                    containerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(3.dp),
                     titleContentColor = MaterialTheme.colorScheme.onSurface
                 )
             )
@@ -447,9 +463,9 @@ fun NoteListScreen(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(horizontal = com.example.notesapp_apv_czg.ui.theme.Spacing.m)
+                    .padding(horizontal = 20.dp)
             ) {
-                Spacer(modifier = Modifier.height(com.example.notesapp_apv_czg.ui.theme.Spacing.m))
+                Spacer(modifier = Modifier.height(16.dp))
 
                 OutlinedTextField(
                     value = searchQuery,
@@ -467,7 +483,7 @@ fun NoteListScreen(
                     singleLine = true
                 )
 
-                Spacer(modifier = Modifier.height(com.example.notesapp_apv_czg.ui.theme.Spacing.m))
+                Spacer(modifier = Modifier.height(16.dp))
 
                 LazyRow(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -561,7 +577,9 @@ fun NoteListScreen(
                                         },
                                         onToggleComplete = onToggleComplete,
                                         onToggleFavorite = onToggleFavorite,
-                                        modifier = Modifier.fillMaxWidth()
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .animateItemPlacement()
                                     )
                                 }
                                 item { Spacer(modifier = Modifier.height(80.dp)) }
@@ -597,7 +615,10 @@ fun NoteListScreen(
                                             }
                                         },
                                         onToggleComplete = onToggleComplete,
-                                        onToggleFavorite = onToggleFavorite
+                                        onToggleFavorite = onToggleFavorite,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .animateItemPlacement()
                                     )
                                 }
                                 item { Spacer(modifier = Modifier.height(80.dp)) }

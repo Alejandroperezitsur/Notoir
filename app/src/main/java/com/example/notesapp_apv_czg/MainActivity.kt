@@ -55,6 +55,7 @@ import com.example.notesapp_apv_czg.ui.theme.ThemeSettingsScreen
 import com.example.notesapp_apv_czg.ui.theme.ThemeManager
 
 class MainActivity : FragmentActivity() {
+    private lateinit var appLockManager: AppLockManager
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { _ ->
@@ -64,23 +65,19 @@ class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        window.setFlags(
-            WindowManager.LayoutParams.FLAG_SECURE,
-            WindowManager.LayoutParams.FLAG_SECURE
-        )
-
         createNotificationChannel()
         requestPermissions()
 
         val db = AppDatabase.getInstance(applicationContext)
         val logger = AndroidStructuredLogger
         val secureKeyManager = SecureKeyManager()
+        val noteCrypto = NoteCrypto(secureKeyManager)
         val repo = NoteRepository(
             dao = db.noteDao(),
             logger = logger,
-            crypto = NoteCrypto(secureKeyManager)
+            crypto = noteCrypto
         )
-        val appLockManager = AppLockManager()
+        appLockManager = AppLockManager()
         val biometricAuthenticator = BiometricAuthenticator(secureKeyManager)
 
         setContent {
@@ -88,8 +85,18 @@ class MainActivity : FragmentActivity() {
                 val nav = rememberNavController()
                 val vm: NoteViewModel = viewModel(factory = NoteViewModelFactory(repo))
                 val scope = rememberCoroutineScope()
-                val vaultState = appLockManager.vaultState.collectAsState().value
+                val vaultState by appLockManager.vaultState.collectAsState()
                 var lastAuthFailed by remember { mutableStateOf(false) }
+                androidx.compose.runtime.LaunchedEffect(vaultState) {
+                    if (vaultState is VaultState.Locked) {
+                        window.setFlags(
+                            WindowManager.LayoutParams.FLAG_SECURE,
+                            WindowManager.LayoutParams.FLAG_SECURE
+                        )
+                    } else {
+                        window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+                    }
+                }
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
                     Box(modifier = Modifier.fillMaxSize()) {
                         NavHost(
@@ -152,6 +159,7 @@ class MainActivity : FragmentActivity() {
                                 noteId = id,
                                 viewModel = vm,
                                 vaultState = appLockManager.vaultState,
+                                    noteCrypto = noteCrypto,
                                 onBack = { nav.popBackStack() },
                                 onEdit = { noteId: Long -> nav.navigate("edit/$noteId") },
                                 onRequestUnlock = { onResult ->
@@ -222,6 +230,23 @@ class MainActivity : FragmentActivity() {
                             lastAuthFailed = lastAuthFailed
                         )
                     }
+                }
+            }
+        }
+    }
+
+    override fun onStop() {
+        super.onStop()
+        if (::appLockManager.isInitialized) {
+            when (appLockManager.vaultState.value) {
+                is VaultState.Locked -> {
+                    window.setFlags(
+                        WindowManager.LayoutParams.FLAG_SECURE,
+                        WindowManager.LayoutParams.FLAG_SECURE
+                    )
+                }
+                is VaultState.Unlocked -> {
+                    window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
                 }
             }
         }

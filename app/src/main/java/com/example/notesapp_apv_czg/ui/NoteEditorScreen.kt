@@ -37,6 +37,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.surfaceColorAtElevation
 import androidx.compose.material3.rememberBottomSheetScaffoldState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -50,6 +51,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
@@ -83,6 +85,7 @@ fun NoteEditorScreen(
     val scaffoldState = rememberBottomSheetScaffoldState()
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    val haptic = LocalHapticFeedback.current
 
     LaunchedEffect(noteId) {
         if (noteId != null) {
@@ -345,7 +348,7 @@ fun NoteEditorScreen(
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
+                    containerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(3.dp),
                     titleContentColor = MaterialTheme.colorScheme.onSurface
                 )
             )
@@ -447,7 +450,12 @@ fun NoteEditorScreen(
                 }
 
                 ExtendedFloatingActionButton(
-                    onClick = { if (!isSaving) saveNoteInternal() },
+                    onClick = {
+                        if (!isSaving) {
+                            saveNoteInternal()
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        }
+                    },
                     containerColor = ColorTokens.success,
                     contentColor = MaterialTheme.colorScheme.onTertiary,
                     enabled = !isSaving
